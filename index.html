@@ -1199,10 +1199,15 @@ function initTimeline(){
   for(let ci=0;ci<CLIPS.length;ci++){const clip=CLIPS[ci];for(let si=0;si<clip.steps.length;si++){const st=clip.steps[si];let sec;if(st.id){const txt=plain(st.say||st.t||'');sec=Math.max(2.2,txt.length*.145+1.25)+(st.s==='N'?.15:.28)+(st.gap??520)/1000;}else sec=(st.wait||600)/1000;const seg={ci,si,start:cursor,duration:sec};TL.push(seg);TLByClip[ci][si]=seg;cursor+=sec;}if(ci<CLIPS.length-1)cursor+=.2;}
   TLTotal=cursor;tlSeek.max=String(TLTotal);document.getElementById('tlEnd').textContent='~'+fmtTime(TLTotal);paintTimeline(0,false);
 }
-function setTimelineSegment(ci,si){TLCurrent=TLByClip[ci]?.[si]||null;segmentStarted=performance.now();segmentDuration=(TLCurrent?.duration||0)*1000;paintTimeline(TLCurrent?.start||0,false)}
-function timelineNow(){if(!TLCurrent)return 0;const at=paused&&pauseAt?pauseAt:performance.now();return Math.min(TLTotal,TLCurrent.start+Math.max(0,(at-segmentStarted)/1000))}
-function paintTimeline(value,preview){const v=Math.max(0,Math.min(TLTotal,value));if(!preview)tlSeek.value=String(v);const shown=preview?v:timelineNow();document.getElementById('tlNow').textContent=fmtTime(shown);tlSeek.style.setProperty('--pct',(TLTotal?shown/TLTotal*100:0)+'%')}
-function seekTimeline(value){if(!TL.length)return;const v=Math.max(0,Math.min(TLTotal,value));let seg=TL.find(x=>v>=x.start&&v<x.start+x.duration)||TL[TL.length-1];if(!seg)return;playAll=true;playClip(seg.ci,seg.si);document.body.classList.add('mouse')}
+function timelineScope(){
+  if(playAll||CUR.ci<0)return {base:0,total:TLTotal,segments:TL};
+  const list=TLByClip[CUR.ci]||[];if(!list.length)return {base:0,total:TLTotal,segments:TL};
+  const base=list[0].start,last=list[list.length-1];return {base,total:last.start+last.duration-base,segments:list};
+}
+function setTimelineSegment(ci,si){TLCurrent=TLByClip[ci]?.[si]||null;segmentStarted=performance.now();segmentDuration=(TLCurrent?.duration||0)*1000;const scope=timelineScope();tlSeek.max=String(scope.total);document.getElementById('tlEnd').textContent='~'+fmtTime(scope.total);paintTimeline((TLCurrent?.start||scope.base)-scope.base,false)}
+function timelineNow(){if(!TLCurrent)return 0;const scope=timelineScope(),at=paused&&pauseAt?pauseAt:performance.now();return Math.min(scope.total,TLCurrent.start-scope.base+Math.max(0,(at-segmentStarted)/1000))}
+function paintTimeline(value,preview){const scope=timelineScope(),v=Math.max(0,Math.min(scope.total,value));if(!preview){tlSeek.max=String(scope.total);tlSeek.value=String(v)}const shown=preview?v:timelineNow();document.getElementById('tlNow').textContent=fmtTime(shown);document.getElementById('tlEnd').textContent='~'+fmtTime(scope.total);tlSeek.style.setProperty('--pct',(scope.total?shown/scope.total*100:0)+'%')}
+function seekTimeline(value){if(!TL.length)return;if(CUR.ci<0)playAll=true;const scope=timelineScope(),v=Math.max(0,Math.min(scope.total,value)),abs=v+scope.base;let seg=scope.segments.find(x=>abs>=x.start&&abs<x.start+x.duration)||scope.segments[scope.segments.length-1];if(!seg)return;playClip(seg.ci,seg.si);document.body.classList.add('mouse')}
 function updateToggle(){const glyph=paused?'▶':'❚❚';document.getElementById('tlToggle').textContent=glyph;document.getElementById('bPlay').textContent=paused?'▶':'⏯'}
 setInterval(()=>{if(!scrubbing)paintTimeline(timelineNow(),false)},200);
 

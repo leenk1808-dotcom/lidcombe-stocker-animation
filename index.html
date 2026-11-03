@@ -638,7 +638,7 @@ function togglePause(){
   if(CUR.ci<0) return; paused=!paused;
   if(paused) pauseAt=performance.now(); else if(pauseAt){ segmentStarted+=performance.now()-pauseAt; pauseAt=0; }
   if(CURA){ if(CURA.a){ paused?CURA.a.pause():CURA.a.play().catch(()=>{}); } else if(window.speechSynthesis){ paused?speechSynthesis.pause():speechSynthesis.resume(); } }
-  $('.ch').forEach(e=>e.style.animationPlayState=paused?'paused':''); document.body.classList.toggle('controls',paused); updateToggle();
+  $$('.ch').forEach(e=>e.style.animationPlayState=paused?'paused':''); document.body.classList.toggle('controls',paused); updateToggle();
 }
 function go(delta){ if(CUR.ci<0) return; const c=CLIPS[CUR.ci]; const t=Math.max(0, Math.min(c.steps.length-1, CUR.si+delta)); playClip(CUR.ci, t); }
 function showMenu(){

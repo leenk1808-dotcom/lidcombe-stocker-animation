@@ -524,6 +524,14 @@ function stopAudio(){
   CURA=null; if(window.speechSynthesis) speechSynthesis.cancel();
   $$('.ch.talk').forEach(e=>e.classList.remove('talk'));
 }
+// GILCU·Gottwald 신규 녹음의 구간별 음량 보정(dB). 기존 리드콤·스토커 음원은 변경하지 않음.
+const AUDIO_GAIN_DB={
+  'G-01':0.1,'G-02':-6.4,'G-03':-6.4,'G-04':-6.1,'G-06':0.1,'G-07':0.5,
+  'G-T1':-10.5,'G-M1':-9.0,'G-H1':0.6,'G-H2':0.6,
+  'GL-01':-7.8,'GL-02':-6.8,'GL-03':-7.9,'GL-04':-6.1,'GL-05':-6.0,'GL-06':-6.2,'GL-07':-7.6,'GL-08':-6.6,'GL-09':-6.8,
+  'GL-T1':-9.2,'GL-T2':-11.6,'GL-T3':-8.9,'GL-T4':-8.6,'GL-T5':-11.5,'GL-T6':-9.1,'GL-T7':-10.8,
+  'GL-D1':2.4,'GL-D2':1.2,'GL-D3':9.8,'GL-D4':1.4,'GL-D5':0,'GL-D6':0.7
+};
 function speak(step){
   return new Promise(resolve=>{
     let fin=false; const done=()=>{ if(fin) return; fin=true; setTalk(step,false); resolve(); };
@@ -545,6 +553,7 @@ function speak(step){
     const tryA=()=>{
       if(k>=exts.length) return tts();
       const a=new Audio(`audio/${step.id}.${exts[k++]}`);
+      a.volume=Math.min(1,Math.max(0,Math.pow(10,(AUDIO_GAIN_DB[step.id]||0)/20)));
       CURA={a, done};
       a.onended=done; a.onerror=()=>{ if(!fin) tryA(); };
       a.play().catch(()=>{});

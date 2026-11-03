@@ -71,10 +71,19 @@ html,body{margin:0;height:100%;background:#0E1424;overflow:hidden;font-family:'P
 #endov button.ghost{background:#fff;color:#1F2A44}
 
 /* hud */
-#hud{position:fixed;right:16px;bottom:14px;display:flex;gap:6px;z-index:100;opacity:0;transition:opacity .3s;align-items:center}
-body.mouse #hud{opacity:1}
-#hud button{background:rgba(20,28,48,.8);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:7px 12px;font-size:15px;cursor:pointer;font-family:inherit}
-#hud .pos{color:#cbd5e1;font-size:13px;margin-right:4px;background:rgba(20,28,48,.8);padding:7px 10px;border-radius:10px}
+#hud{position:fixed;right:16px;bottom:64px;display:flex;gap:6px;z-index:100;opacity:0;transition:opacity .3s;align-items:center}
+body.mouse #hud,body.controls #hud{opacity:1}
+#hud button{background:rgba(20,28,48,.84);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:7px 12px;font-size:15px;cursor:pointer;font-family:inherit}
+#hud .pos{color:#cbd5e1;font-size:13px;margin-right:4px;background:rgba(20,28,48,.84);padding:7px 10px;border-radius:10px}
+#timeline{position:fixed;left:0;right:0;bottom:0;height:54px;padding:0 18px;box-sizing:border-box;display:flex;align-items:center;gap:12px;z-index:101;background:linear-gradient(0deg,rgba(8,12,22,.94),rgba(8,12,22,.72));color:#fff;opacity:0;transition:opacity .3s}
+body.mouse #timeline,body.controls #timeline{opacity:1}
+#tlToggle{flex:none;width:34px;height:34px;border:0;border-radius:50%;background:transparent;color:#fff;font-size:20px;cursor:pointer}
+#tlNow,#tlEnd{font-size:13px;font-variant-numeric:tabular-nums;color:#e5e7eb;min-width:42px}
+#tlSeek{flex:1;min-width:60px;appearance:none;height:4px;border-radius:99px;background:linear-gradient(90deg,#e50914 0%,#e50914 var(--pct,0%),rgba(255,255,255,.4) var(--pct,0%));cursor:pointer;outline:none}
+#tlSeek::-webkit-slider-thumb{appearance:none;width:13px;height:13px;border-radius:50%;background:#e50914;border:0;box-shadow:0 1px 5px #0008}
+#tlSeek::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:#e50914;border:0}
+#tlSeek:hover{height:6px}
+@media(max-width:600px){#timeline{padding:0 8px;gap:6px;height:48px}#tlNow,#tlEnd{font-size:11px;min-width:36px}#hud{right:8px;bottom:56px}#hud .pos{display:none}}
 
 /* ---------- C0 ---------- */
 .c0t{position:absolute;left:0;right:0;top:120px;text-align:center;font-size:54px;font-weight:800}
@@ -373,6 +382,7 @@ body.mouse #hud{opacity:1}
   <button id="bNext" title="다음 대사 (→)">▶</button>
   <button id="bFs" title="전체화면 (F)">⛶</button>
 </div>
+<div id="timeline" aria-label="영상 탐색 조작"><button id="tlToggle" title="일시정지/재생">▶</button><span id="tlNow">0:00</span><input id="tlSeek" type="range" min="0" max="100" value="0" step="0.1" aria-label="영상 재생 위치"><span id="tlEnd">~18:00</span></div>
 <script>
 /* =========================================================
    리드콤 프로그램 (v1.6, 2024) & 스토커 프로브 기법
@@ -591,7 +601,7 @@ function build(ci){
   CLIPS[ci].build(S);
 }
 async function playClip(ci, start=0){
-  const tk={}; RUN=tk; paused=false; menu.classList.remove('on');
+  const tk={}; RUN=tk; paused=false; pauseAt=0; document.body.classList.remove('controls'); updateToggle(); menu.classList.remove('on');
   const clip=CLIPS[ci];
   stage.classList.add('instant'); INSTANT=true;
   build(ci);
@@ -601,7 +611,7 @@ async function playClip(ci, start=0){
   if(start>0) clearBubbles();
   for(let i=start;i<clip.steps.length;i++){
     if(RUN!==tk) return;
-    CUR={ci, si:i}; updPos();
+    CUR={ci, si:i}; updPos(); setTimelineSegment(ci,i);
     await waitPause(tk); if(RUN!==tk) return;
     const st=clip.steps[i];
     applyStart(st);
@@ -626,8 +636,9 @@ function showEnd(ci){
 function updPos(){ const c=CLIPS[CUR.ci]; document.getElementById('pos').textContent = c ? `${c.short} · ${Math.min(CUR.si+1,c.steps.length)}/${c.steps.length}` : ''; }
 function togglePause(){
   if(CUR.ci<0) return; paused=!paused;
+  if(paused) pauseAt=performance.now(); else if(pauseAt){ segmentStarted+=performance.now()-pauseAt; pauseAt=0; }
   if(CURA){ if(CURA.a){ paused?CURA.a.pause():CURA.a.play().catch(()=>{}); } else if(window.speechSynthesis){ paused?speechSynthesis.pause():speechSynthesis.resume(); } }
-  $$('.ch').forEach(e=>e.style.animationPlayState=paused?'paused':'');
+  $('.ch').forEach(e=>e.style.animationPlayState=paused?'paused':''); document.body.classList.toggle('controls',paused); updateToggle();
 }
 function go(delta){ if(CUR.ci<0) return; const c=CLIPS[CUR.ci]; const t=Math.max(0, Math.min(c.steps.length-1, CUR.si+delta)); playClip(CUR.ci, t); }
 function showMenu(){
@@ -649,6 +660,9 @@ document.getElementById('bRe').onclick=()=>{ if(CUR.ci>=0) playClip(CUR.ci); };
 document.getElementById('bPrev').onclick=()=>go(-1);
 document.getElementById('bNext').onclick=()=>go(1);
 document.getElementById('bPlay').onclick=togglePause;
+document.getElementById('tlToggle').onclick=togglePause;
+document.getElementById('tlSeek').addEventListener('input',e=>{scrubbing=true;paintTimeline(+e.target.value,true)});
+document.getElementById('tlSeek').addEventListener('change',e=>{scrubbing=false;seekTimeline(+e.target.value)});
 document.getElementById('bFs').onclick=()=>{ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen(); };
 addEventListener('keydown', e=>{
   if(e.key===' '){ e.preventDefault(); togglePause(); }
@@ -1167,9 +1181,26 @@ const CLIPS = [
 
 ];
 
+/* ---- full-animation seek timeline ---- */
+let TL=[], TLByClip=[], TLTotal=0, TLCurrent=null, segmentStarted=0, segmentDuration=0, pauseAt=0, scrubbing=false;
+const tlSeek=document.getElementById('tlSeek');
+function fmtTime(v){v=Math.max(0,Math.floor(v));return Math.floor(v/60)+':'+String(v%60).padStart(2,'0')}
+function initTimeline(){
+  TL=[];TLByClip=CLIPS.map(c=>[]);let cursor=0;
+  for(let ci=0;ci<CLIPS.length;ci++){const clip=CLIPS[ci];for(let si=0;si<clip.steps.length;si++){const st=clip.steps[si];let sec;if(st.id){const txt=plain(st.say||st.t||'');sec=Math.max(2.2,txt.length*.145+1.25)+(st.s==='N'?.15:.28)+(st.gap??520)/1000;}else sec=(st.wait||600)/1000;const seg={ci,si,start:cursor,duration:sec};TL.push(seg);TLByClip[ci][si]=seg;cursor+=sec;}if(ci<CLIPS.length-1)cursor+=.2;}
+  TLTotal=cursor;tlSeek.max=String(TLTotal);document.getElementById('tlEnd').textContent='~'+fmtTime(TLTotal);paintTimeline(0,false);
+}
+function setTimelineSegment(ci,si){TLCurrent=TLByClip[ci]?.[si]||null;segmentStarted=performance.now();segmentDuration=(TLCurrent?.duration||0)*1000;paintTimeline(TLCurrent?.start||0,false)}
+function timelineNow(){if(!TLCurrent)return 0;const at=paused&&pauseAt?pauseAt:performance.now();return Math.min(TLTotal,TLCurrent.start+Math.max(0,(at-segmentStarted)/1000))}
+function paintTimeline(value,preview){const v=Math.max(0,Math.min(TLTotal,value));if(!preview)tlSeek.value=String(v);const shown=preview?v:timelineNow();document.getElementById('tlNow').textContent=fmtTime(shown);tlSeek.style.setProperty('--pct',(TLTotal?shown/TLTotal*100:0)+'%')}
+function seekTimeline(value){if(!TL.length)return;const v=Math.max(0,Math.min(TLTotal,value));let seg=TL.find(x=>v>=x.start&&v<x.start+x.duration)||TL[TL.length-1];if(!seg)return;playAll=true;playClip(seg.ci,seg.si);document.body.classList.add('mouse')}
+function updateToggle(){const glyph=paused?'▶':'❚❚';document.getElementById('tlToggle').textContent=glyph;document.getElementById('bPlay').textContent=paused?'▶':'⏯'}
+setInterval(()=>{if(!scrubbing)paintTimeline(timelineNow(),false)},200);
+
 /* expose for tooling */
 window.CLIPS = CLIPS; window.SPK = SPK;
 window.DBG = { show(ci, si){ RUN={}; menu.classList.remove('on'); stage.classList.add('instant'); INSTANT=true; build(ci); const c=CLIPS[ci]; for(let i=0;i<=si && i<c.steps.length;i++){ applyStart(c.steps[i]); if(i<si) c.steps[i].after&&c.steps[i].after(S);} INSTANT=false; stopAudio(); } };
+initTimeline();
 showMenu();
 </script>
 </body>
